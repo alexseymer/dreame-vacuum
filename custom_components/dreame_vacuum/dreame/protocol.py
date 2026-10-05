@@ -880,6 +880,30 @@ class DreameVacuumCloudProtocol:
     def get_api_url(self) -> str:
         return f"https://{('' if self._country == 'cn' else (self._country + '.'))}api.io.mi.com/app"
 
+    def is_mova_device(self) -> bool:
+        return False
+
+
+class MOVAVacuumCloudProtocol(DreameVacuumCloudProtocol):
+    """MOVA Cloud Protocol using mova-tech.com infrastructure"""
+
+    def __init__(
+        self, username: str, password: str, country: str, auth_key: str = None, device_id: str = None
+    ) -> None:
+        super().__init__(username, password, country, auth_key, device_id)
+        self._useragent = f"Android-7.1.1-1.0.0-ONEPLUS A3010-136-{self._client_id} APP/com.dreame.movahome APPV/1.0.0"
+
+    def is_mova_device(self) -> bool:
+        return True
+
+    def get_api_url(self) -> str:
+        region = self._country
+        if region == "eu":
+            region = "eu"
+        elif region == "de":
+            region = "eu"
+        return f"https://{region}.iot.mova-tech.com:13267"
+
     def signed_nonce(self, nonce: str) -> str:
         hash_object = hashlib.sha256(base64.b64decode(self._ssecurity) + base64.b64decode(nonce))
         return base64.b64encode(hash_object.digest()).decode("utf-8")
@@ -976,11 +1000,13 @@ class DreameVacuumProtocol:
         prefer_cloud: bool = False,
         device_id: str = None,
         auth_key: str = None,
+        model: str = None,
     ) -> None:
         self._ready = False
         self.prefer_cloud = prefer_cloud
         self._connected = False
         self._mac = None
+        self._model = model
 
         if ip and token:
             self.device = DreameVacuumDeviceProtocol(ip, token)
@@ -989,12 +1015,23 @@ class DreameVacuumProtocol:
             self.device = None
 
         if username and password and country:
-            self.cloud = DreameVacuumCloudProtocol(username, password, country, auth_key, device_id)
+            self.cloud = self._create_cloud_protocol(username, password, country, auth_key, device_id)
         else:
             self.prefer_cloud = False
             self.cloud = None
 
-        self.device_cloud = DreameVacuumCloudProtocol(username, password, country, auth_key) if prefer_cloud else None
+        self.device_cloud = self._create_cloud_protocol(username, password, country, auth_key) if prefer_cloud else None
+
+    def _is_mova_device(self) -> bool:
+        if self._model and "mova" in self._model.lower():
+            return True
+        return False
+
+    def _create_cloud_protocol(self, username: str, password: str, country: str, auth_key: str = None, device_id: str = None):
+        if self._is_mova_device():
+            return MOVAVacuumCloudProtocol(username, password, country, auth_key, device_id)
+        else:
+            return DreameVacuumCloudProtocol(username, password, country, auth_key, device_id)
 
     def set_credentials(self, ip: str, token: str, mac: str = None):
         self._mac = mac
@@ -1008,8 +1045,23 @@ class DreameVacuumProtocol:
 
     def connect(self, message_callback=None, connected_callback=None, retry_count=1) -> Any:
         info = self.send("miIO.info", retry_count=retry_count)
-        if info and (self.prefer_cloud or not self.device) and self.device_cloud:
-            self._connected = True
+
+        if info:
+            # Update model if detected from device
+            if "model" in info and self._model != info["model"]:
+                self._model = info["model"]
+                # Recreate cloud protocol if it's a MOVA device and we haven't initialized yet
+                if self.cloud and "mova" in self._model.lower() and not isinstance(self.cloud, MOVAVacuumCloudProtocol):
+                    self.cloud = MOVAVacuumCloudProtocol(
+                        self.cloud._username,
+                        self.cloud._password,
+                        self.cloud._country,
+                        self.cloud._auth_key,
+                        self.cloud._did
+                    )
+
+            if (self.prefer_cloud or not self.device) and self.device_cloud:
+                self._connected = True
 
         if info and not self._ready:
             try:

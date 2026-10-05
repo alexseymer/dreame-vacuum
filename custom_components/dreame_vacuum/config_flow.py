@@ -88,8 +88,18 @@ DREAME_MODELS = [
     "dreame.vacuum.r2263",
     "dreame.vacuum.r2253",
     "dreame.vacuum.p2028",
+    # MOVA models
     "dreame.vacuum.p2157",
     "dreame.vacuum.p2156o",
+    "mova.vacuum.r24916",   # P10 Pro Ultra
+    "mova.vacuum.r2340",    # Z60s
+    "mova.vacuum.r5979a",   # V70 Ultra Complete
+    "mova.vacuum.r9427x",   # P60
+    "mova.vacuum.r9480",    # Z60
+    "mova.vacuum.r9503",    # Z60 SE
+    "mova.vacuum.r2587a",   # P50 Pro Ultra / V50 Ultra
+    "mova.vacuum.r2582L",   # V50 Ultra Complete
+    "mova.vacuum.r94745",   # P50
 ]
 
 MIJIA_MODELS = [
@@ -272,6 +282,7 @@ class DreameVacuumFlowHandler(ConfigFlow, domain=DOMAIN):
                     self.prefer_cloud,
                     self.device_id,
                     self.protocol.cloud.auth_key if self.protocol and self.protocol.cloud else None,
+                    self.model,
                 )
 
                 info = await self.hass.async_add_executor_job(self.protocol.connect, None, None, 3)
@@ -625,8 +636,8 @@ class DreameVacuumFlowHandler(ConfigFlow, domain=DOMAIN):
             {
                 vol.Required(CONF_USERNAME, default=self.username): str,
                 vol.Required(CONF_PASSWORD, default=self.password): str,
-                vol.Required(CONF_COUNTRY, default=("de" if self.country == "eu" else self.country)): vol.In(
-                    ["de", "cn", "us", "ru", "tw", "sg", "in", "i2"]
+                vol.Required(CONF_COUNTRY, default=self.country): vol.In(
+                    ["cn", "us", "eu", "de", "ru", "tw", "sg", "in", "i2"]
                 ),
                 vol.Optional(CONF_PREFER_CLOUD, default=self.prefer_cloud): bool,
             }
